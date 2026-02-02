@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SatHunters - Battle Royale Lightning</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { background: #000; color: #0ff; font-family: 'Share Tech Mono', monospace; overflow: hidden; }
+        #gameCanvas { width: 100vw; height: 100vh; display: block; }
+        .hud-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
+        .top-bar { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; gap: 20px; }
+        .stat-box { background: rgba(0, 10, 20, 0.9); border: 1px solid #0ff; padding: 15px 20px; backdrop-filter: blur(10px); }
+        .sats-display { font-size: 1.8rem; color: #ffd700; font-family: 'Orbitron'; text-shadow: 0 0 10px #ffd700; }
+        .bounty-alert { color: #ff003c; animation: blink 1s infinite; font-weight: bold; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .bottom-hud { position: absolute; bottom: 30px; left: 30px; right: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .weapon-wheel { display: flex; gap: 10px; background: rgba(0,0,0,0.8); padding: 10px; border: 2px solid #333; }
+        .weapon-slot { width: 80px; height: 80px; background: #111; border: 2px solid #333; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.3s; cursor: pointer; pointer-events: auto; }
+        .weapon-slot.active { border-color: #0f0; box-shadow: 0 0 15px #0f0; transform: scale(1.1); }
+        .slot-key { position: absolute; top: -20px; color: #666; font-size: 0.8rem; }
+        .slot-icon { font-size: 1.8rem; }
+        .slot-ammo { color: #ff0; font-size: 0.9rem; }
+        .build-menu { display: flex; gap: 10px; background: rgba(0,50,100,0.9); padding: 10px; border: 2px solid #0ff; pointer-events: auto; }
+        .build-item { width: 60px; height: 60px; background: rgba(0,0,0,0.5); border: 1px solid #0ff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+        .build-item:hover { background: #0ff; color: #000; }
+        .build-cost { color: #ffd700; font-size: 0.7rem; }
+        .event-banner { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, transparent, #f0f, transparent); padding: 20px 60px; font-size: 1.5rem; font-weight: bold; text-transform: uppercase; display: none; z-index: 60; border-top: 2px solid #fff; border-bottom: 2px solid #fff; text-shadow: 0 0 20px #f0f; animation: slideDown 0.5s ease-out; }
+        @keyframes slideDown { from { transform: translateX(-50%) translateY(-100px); opacity: 0; } }
+        .compass-container { position: fixed; top: 50%; right: 30px; transform: translateY(-50%); width: 80px; height: 300px; background: rgba(0,0,0,0.8); border: 2px solid #0ff; display: flex; flex-direction: column; align-items: center; padding: 10px 0; }
+        .compass-arrow { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 30px solid #0f0; filter: drop-shadow(0 0 10px #0f0); margin: 20px 0; transition: transform 0.3s; }
+        .zone-info { text-align: center; font-size: 0.8rem; margin-top: 10px; }
+        .notification { position: fixed; top: 100px; right: 20px; background: rgba(0,0,0,0.9); border-left: 4px solid #ffd700; padding: 15px; max-width: 300px; animation: slideIn 0.3s; margin-bottom: 10px; z-index: 100; }
+        .notification.danger { border-color: #f00; color: #f00; }
+        .notification.loot { border-color: #0f0; color: #0f0; }
+        @keyframes slideIn { from { transform: translateX(100%); } }
+        .victory-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #000 0%, #003300 100%); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .victory-title { font-size: 4rem; color: #0f0; font-family: 'Orbitron'; text-shadow: 0 0 30px #0f0; }
+        .payout-amount { font-size: 3rem; color: #ffd700; margin: 20px 0; }
+        .menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #001122, #000); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .menu-card { background: rgba(0,20,40,0.95); border: 2px solid #0ff; padding: 40px; max-width: 600px; width: 90%; box-shadow: 0 0 50px rgba(0,255,255,0.3); }
+        .btn { width: 100%; padding: 15px; margin: 10px 0; background: transparent; border: 2px solid #0ff; color: #0ff; font-family: 'Share Tech Mono'; font-size: 1.1rem; cursor: pointer; transition: all 0.3s; }
+        .btn:hover:not(:disabled) { background: #0ff; color: #000; box-shadow: 0 0 30px #0ff; }
+        .btn.gold { border-color: #ffd700; color: #ffd700; }
+        .btn.gold:hover { background: #ffd700; color: #000; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; font-family: 'Share Tech Mono'; }
+        .crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; border: 2px solid rgba(0,255,255,0.8); border-radius: 50%; pointer-events: none; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div class="crosshair"></div>
+
+<div class="event-banner" id="eventBanner">☠️ BLOOD MOON ☠️</div>
+
+<div class="hud-container" id="gameUI" style="display: none;">
+    <div class="top-bar">
+        <div>
+            <div class="stat-box">
+                <div class="sats-display">⚡ <span id="satsText">1021</span> S</div>
+                <div style="margin-top: 5px; font-size: 0.9rem;">
+                    ❤️ <span id="healthText">100</span> | 
+                    💀 <span id="killText">0</span>
+                    <span id="bountyTag" class="bounty-alert" style="display: none;"> | 🔴 PRIME</span>
+                </div>
+            </div>
+            <div class="stat-box" style="margin-top: 10px; font-size: 0.8rem; color: #666;">
+                Tempête: <span id="stormText">60</span>s | Event: <span id="eventTimer">120</span>s
+            </div>
+        </div>
+        <div class="stat-box" style="text-align: right;">
+            <div style="color: #f00; font-size: 1.3rem;">🔴 <span id="aliveText">24</span></div>
+            <div style="font-size: 0.8rem; color: #666;">Code: <span id="displayRoomCode">----</span></div>
+        </div>
+    </div>
+    
+    <div class="compass-container">
+        <div style="font-size: 0.7rem;">SAFE</div>
+        <div class="compass-arrow" id="compassArrow"></div>
+        <div class="zone-info"><div id="zoneDist">0m</div></div>
+    </div>
+    
+    <div class="bottom-hud">
+        <div class="weapon-wheel">
+            <div class="weapon-slot active" onclick="game.switchWeapon(0)"><div class="slot-key">[1]</div><div class="slot-icon">🔫</div><div class="slot-ammo" id="ammo0">12</div></div>
+            <div class="weapon-slot" onclick="game.switchWeapon(1)"><div class="slot-key">[2]</div><div class="slot-icon">❌</div><div class="slot-ammo" id="ammo1">0</div></div>
+            <div class="weapon-slot" onclick="game.switchWeapon(2)"><div class="slot-key">[3]</div><div class="slot-icon">❌</div><div class="slot-ammo" id="ammo2">0</div></div>
+        </div>
+        
+        <div class="build-menu">
+            <div class="build-item" onclick="game.tryBuild('wall')"><div>🧱</div><div class="build-cost">50S</div></div>
+            <div class="build-item" onclick="game.tryBuild('ramp')"><div>📐</div><div class="build-cost">30S</div></div>
+            <div style="color: #666; font-size: 0.7rem; margin-left: 10px;">[B] Build<br>[F] Loot</div>
+        </div>
+    </div>
+</div>
+
+<div class="victory-overlay" id="victoryScreen">
+    <div class="victory-title">🏆 CHICKEN DINNER</div>
+    <div style="color: #fff; margin: 10px;">Dernier survivant !</div>
+    <div class="payout-amount">+<span id="winAmount">0</span> SATS</div>
+    <div style="background: #fff; padding: 20px; margin: 20px;"><div id="withdrawQr"></div></div>
+    <div id="lnurlText" style="max-width: 500px; word-break: break-all; padding: 0 20px;"></div>
+    <button class="btn gold" onclick="location.reload()" style="max-width: 300px; margin-top: 20px;">REJOUER</button>
+</div>
+
+<div class="menu" id="mainMenu">
+    <div class="menu-card">
+        <h1 style="font-family: 'Orbitron'; font-size: 3rem; text-align: center; margin-bottom: 10px; text-shadow: 0 0 20px #0ff;">SAT HUNTERS</h1>
+        <div style="text-align: center; color: #f0f; margin-bottom: 30px; letter-spacing: 3px;">ULTIMATE EDITION</div>
+        
+        <div id="setupPanel">
+            <div style="background: rgba(255,0,0,0.2); border: 1px solid #f00; padding: 15px; margin-bottom: 20px; font-size: 0.85rem; display: none;" id="configError">
+                ⚠️ Remplissez la configuration Firebase ci-dessous pour que le jeu fonctionne !
+            </div>
+            
+            <input type="text" id="firebaseApiKey" placeholder="Firebase API Key">
+            <input type="text" id="firebaseDbUrl" placeholder="Firebase Database URL">
+            <input type="text" id="playerName" placeholder="Votre pseudo" value="SatHunter">
+            
+            <button class="btn" onclick="game.startGame()">🎮 JOUER MAINTENANT</button>
+            
+            <details style="margin-top: 20px; color: #666;">
+                <summary>Configuration avancée (LNBits)</summary>
+                <input type="text" id="lnbitsUrl" placeholder="LNBits URL (optionnel)" style="margin-top: 10px;">
+                <input type="password" id="lnbitsKey" placeholder="LNBits Key (optionnel)">
+                <div style="font-size: 0.8rem; margin-top: 10px; color: #888;">
+                    Sans LNBits, le jeu fonctionne en mode démo avec des sats virtuels.
+                </div>
+            </details>
+        </div>
+        
+        <div id="lobbyPanel" style="display: none;">
+            <h2 style="color: #ffd700; text-align: center;">LOBBY</h2>
+            <div style="text-align: center; font-size: 2rem; color: #0ff; margin: 20px 0; letter-spacing: 5px;" id="roomCode">------</div>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <button class="btn" style="width: auto; padding: 10px 20px;" onclick="game.copyCode()">📋 Copier Code</button>
+            </div>
+            <div id="playerList" style="min-height: 100px; border: 1px solid #333; padding: 10px; margin: 20px 0;"></div>
+            <button class="btn gold" onclick="game.launchGame()">🚀 DÉMARRER PARTIE</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, onDisconnect, remove, update, push, child, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+class SatHuntersGame {
+    constructor() {
+        this.config = { worldSize: 1000, maxPlayers: 24, entryFee: 1021, stormInterval: 45, eventInterval: 120 };
+        this.state = {
+            playerId: 'p_' + Math.random().toString(36).substr(2, 8),
+            roomId: null, isHost: false, db: null,
+            player: { name: '', x: 0, z: 0, health: 100, sats: 1021, kills: 0, bounty: 0, isDead: false, inventory: [{type:'pistol',ammo:12}, null, null], currentSlot: 0 },
+            room: { safeZone: {x:0,z:0,radius:400}, nextZone: {x:0,z:0,radius:300}, stormTime: 45, eventTime: 120, eventActive: null },
+            players: new Map()
+        };
+        this.keys = {};
+        this.gameStarted = false;
+        
+        window.addEventListener('keydown', (e) => this.handleKey(e, true));
+        window.addEventListener('keyup', (e) => this.handleKey(e, false));
+        window.addEventListener('mousemove', (e) => {
+            this.mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            this.mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+        window.addEventListener('mousedown', () => this.shoot());
+    }
+    
+    startGame() {
+        const apiKey = document.getElementById('firebaseApiKey').value;
+        const dbUrl = document.getElementById('firebaseDbUrl').value;
+        
+        if (!apiKey || !dbUrl) {
+            document.getElementById('configError').style.display = 'block';
+            return;
+        }
+        
+        try {
+            const app = initializeApp({
+                apiKey: apiKey,
+                authDomain: "sathunters.firebaseapp.com",
+                databaseURL: dbUrl,
+                projectId: "sathunters",
+                storageBucket: "sathunters.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abc123"
+            });
+            this.state.db = getDatabase(app);
+            this.state.player.name = document.getElementById('playerName').value || 'Anonymous';
+            this.createRoom();
+        } catch(e) {
+            alert('Erreur Firebase: ' + e.message);
+        }
+    }
+    
+    createRoom() {
+        this.state.roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        this.state.isHost = true;
+        
+        document.getElementById('setupPanel').style.display = 'none';
+        document.getElementById('lobbyPanel').style.display = 'block';
+        document.getElementById('roomCode').textContent = this.state.roomId;
+        document.getElementById('displayRoomCode').textContent = this.state.roomId;
+        
+        // Create room
+        set(ref(this.state.db, `rooms/${this.state.roomId}`), {
+            created: serverTimestamp(),
+            host: this.state.playerId,
+            status: 'waiting',
+            safeZone: this.state.room.safeZone,
+            nextZone: this.generateNextZone(),
+            stormTime: this.config.stormInterval,
+            eventTime: this.config.eventInterval
+        });
+        
+        this.joinRoom();
+    }
+    
+    joinRoom() {
+        const playerRef = ref(this.state.db, `rooms/${this.state.roomId}/players/${this.state.playerId}`);
+        set(playerRef, { ...this.state.player, joined: serverTimestamp() });
+        onDisconnect(playerRef).remove();
+        
+        onValue(ref(this.state.db, `rooms/${this.state.roomId}/players`), (snap) => {
+            this.updateLobby(snap.val());
+        });
+        
+        onValue(ref(this.state.db, `rooms/${this.state.roomId}`), (snap) => {
+            const data = snap.val();
+            if (data && data.status === 'active' && !this.gameStarted) {
+                this.initWorld();
+            }
+            if (this.gameStarted && data) {
+                this.updateStorm(data);
+                if (data.eventActive) this.showEvent(data.eventActive);
+            }
+        });
+    }
+    
+    generateNextZone() {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 200;
+        return { x: Math.cos(angle) * dist, z: Math.sin(angle) * dist, radius: Math.max(50, 250) };
+    }
+    
+    updateLobby(data) {
+        if (!data) return;
+        const list = document.getElementById('playerList');
+        list.innerHTML = Object.values(data).map(p => 
+            `<div style="padding: 5px; color: ${p.isDead ? '#666' : '#0ff'};">${p.isDead ? '💀' : '🔵'} ${p.name} ${p.id === this.state.playerId ? '(VOUS)' : ''}</div>`
+        ).join('');
+    }
+    
+    copyCode() {
+        navigator.clipboard.writeText(this.state.roomId);
+        this.notify('Code copié !');
+    }
+    
+    launchGame() {
+        update(ref(this.state.db, `rooms/${this.state.roomId}`), { status: 'active', startedAt: serverTimestamp() });
+    }
+    
+    initWorld() {
+        this.gameStarted = true;
+        document.getElementById('mainMenu').style.display = 'none';
+        document.getElementById('gameUI').style.display = 'block';
+        
+        // Three.js init
+        const canvas = document.getElementById('gameCanvas');
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x000205);
+        this.scene.fog = new THREE.FogExp2(0x000205, 0.002);
+        
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
+        this.camera.position.set(0, 50, 50);
+        
+        this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        this.scene.add(new THREE.AmbientLight(0x404080, 1));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+        dir.position.set(100, 200, 100);
+        this.scene.add(dir);
+        
+        this.scene.add(new THREE.GridHelper(this.config.worldSize, 50, 0xff00ff, 0x001133));
+        
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(this.config.worldSize, this.config.worldSize),
+            new THREE.MeshStandardMaterial({ color: 0x000205, roughness: 0.8 })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        this.scene.add(ground);
+        
+        // Player mesh
+        const group = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(3, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.5 })
+        );
+        group.add(body);
+        group.add(new THREE.PointLight(0x00ffff, 2, 30));
+        const arrow = new THREE.Mesh(new THREE.ConeGeometry(1, 4, 8), new THREE.MeshBasicMaterial({color:0xffffff}));
+        arrow.rotation.x = -Math.PI/2; arrow.position.z = -4;
+        group.add(arrow);
+        group.position.set(0, 3, 0);
+        this.scene.add(group);
+        this.playerMesh = group;
+        
+        // Zone visuals
+        this.createZones();
+        
+        // Loop
+        this.animate();
+        setInterval(() => this.syncPos(), 1000/20);
+        
+        if (this.state.isHost) {
+            setInterval(() => this.hostLoop(), 1000);
+        }
+    }
+    
+    createZones() {
+        const safeGeo = new THREE.RingGeometry(395, 400, 64);
+        const safeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+        this.safeZoneMesh = new THREE.Mesh(safeGeo, safeMat);
+        this.safeZoneMesh.rotation.x = -Math.PI/2;
+        this.scene.add(this.safeZoneMesh);
+        
+        const nextGeo = new THREE.RingGeometry(248, 250, 64);
+        const nextMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        this.nextZoneMesh = new THREE.Mesh(nextGeo, nextMat);
+        this.nextZoneMesh.rotation.x = -Math.PI/2;
+        this.scene.add(this.nextZoneMesh);
+    }
+    
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        if (!this.state.player.isDead) {
+            const speed = 0.5;
+            if (this.keys['z'] || this.keys['arrowup']) this.state.player.z -= speed;
+            if (this.keys['s'] || this.keys['arrowdown']) this.state.player.z += speed;
+            if (this.keys['q'] || this.keys['arrowleft']) this.state.player.x -= speed;
+            if (this.keys['d'] || this.keys['arrowright']) this.state.player.x += speed;
+            
+            const half = this.config.worldSize/2;
+            this.state.player.x = Math.max(-half, Math.min(half, this.state.player.x));
+            this.state.player.z = Math.max(-half, Math.min(half, this.state.player.z));
+            
+            this.playerMesh.position.set(this.state.player.x, 3, this.state.player.z);
+            this.camera.position.x += (this.state.player.x + 30 - this.camera.position.x) * 0.1;
+            this.camera.position.z += (this.state.player.z + 30 - this.camera.position.z) * 0.1;
+            this.camera.lookAt(this.state.player.x, 0, this.state.player.z);
+            
+            this.checkStorm();
+        }
+        this.renderer.render(this.scene, this.camera);
+    }
+    
+    shoot() {
+        const w = this.state.player.inventory[this.state.player.currentSlot];
+        if (!w || w.ammo <= 0) return;
+        if (this.state.player.sats < 10) { this.notify('Pas assez de sats!', 'danger'); return; }
+        
+        w.ammo--;
+        this.state.player.sats -= 10;
+        this.updateUI();
+        
+        // Hit detection simple
+        this.state.players.forEach((p, id) => {
+            if (id === this.state.playerId || p.isDead) return;
+            const dist = Math.hypot(p.x - this.state.player.x, p.z - this.state.player.z);
+            if (dist < 15) {
+                this.handleHit(id);
+            }
+        });
+    }
+    
+    handleHit(targetId) {
+        const target = this.state.players.get(targetId);
+        if (!target) return;
+        
+        target.health -= 25;
+        if (target.health <= 0) {
+            this.state.player.kills++;
+            const reward = 300 + Math.floor(target.sats * 0.3);
+            this.state.player.sats += reward;
+            this.notify(`💀 KILL! +${reward}sats`, 'loot');
+            
+            if (this.state.player.kills === 3) {
+                this.state.player.bounty = 500;
+                document.getElementById('bountyTag').style.display = 'inline';
+                this.notify('🔴 PRIME sur votre tête!', 'danger');
+            }
+            
+            update(ref(this.state.db, `rooms/${this.state.roomId}/players/${targetId}`), { isDead: true });
+            this.checkWin();
+        }
+        update(ref(this.state.db, `rooms/${this.state.roomId}/players/${this.state.playerId}`), this.state.player);
+    }
+    
+    tryBuild(type) {
+        const costs = { wall: 50, ramp: 30 };
+        if (this.state.player.sats < costs[type]) { this.notify('Pas assez de sats!', 'danger'); return; }
+        this.state.player.sats -= costs[type];
+        this.updateUI();
+        this.notify(`Construction: ${type}`, 'loot');
+    }
+    
+    switchWeapon(slot) {
+        this.state.player.currentSlot = slot;
+        document.querySelectorAll('.weapon-slot').forEach((el, i) => el.classList.toggle('active', i === slot));
+    }
+    
+    hostLoop() {
+        this.state.room.stormTime--;
+        this.state.room.eventTime--;
+        
+        if (this.state.room.stormTime <= 0) {
+            this.state.room.stormTime = this.config.stormInterval;
+            const newZone = this.generateNextZone();
+            update(ref(this.state.db, `rooms/${this.state.roomId}`), { 
+                safeZone: this.state.room.nextZone, 
+                nextZone: newZone,
+                stormTime: this.config.stormInterval
+            });
+        }
+        
+        if (this.state.room.eventTime <= 0) {
+            this.state.room.eventTime = this.config.eventInterval;
+            const events = ['BLOOD_MOON', 'MARKET'];
+            update(ref(this.state.db, `rooms/${this.state.roomId}`), { eventActive: events[Math.floor(Math.random()*events.length)] });
+        }
+        
+        update(ref(this.state.db, `rooms/${this.state.roomId}`), { 
+            stormTime: this.state.room.stormTime,
+            eventTime: this.state.room.eventTime
+        });
+    }
+    
+    updateStorm(data) {
+        this.state.room.safeZone = data.safeZone;
+        this.state.room.nextZone = data.nextZone;
+        
+        if (this.safeZoneMesh) {
+            this.safeZoneMesh.position.set(data.safeZone.x, 0.1, data.safeZone.z);
+            this.safeZoneMesh.scale.set(data.safeZone.radius/400, data.safeZone.radius/400, 1);
+        }
+        if (this.nextZoneMesh) {
+            this.nextZoneMesh.position.set(data.nextZone.x, 0.2, data.nextZone.z);
+            this.nextZoneMesh.scale.set(data.nextZone.radius/250, data.nextZone.radius/250, 1);
+        }
+        
+        const dx = data.nextZone.x - this.state.player.x;
+        const dz = data.nextZone.z - this.state.player.z;
+        document.getElementById('compassArrow').style.transform = `rotate(${Math.atan2(dx, dz)}rad)`;
+        document.getElementById('zoneDist').textContent = Math.floor(Math.hypot(dx, dz)) + 'm';
+        document.getElementById('stormText').textContent = data.stormTime || 0;
+        document.getElementById('eventTimer').textContent = data.eventTime || 0;
+    }
+    
+    showEvent(name) {
+        const banner = document.getElementById('eventBanner');
+        banner.textContent = `☠️ ${name} ☠️`;
+        banner.style.display = 'block';
+        setTimeout(() => banner.style.display = 'none', 5000);
+    }
+    
+    checkStorm() {
+        const dist = Math.hypot(this.state.player.x - this.state.room.safeZone.x, this.state.player.z - this.state.room.safeZone.z);
+        if (dist > this.state.room.safeZone.radius) {
+            this.state.player.health -= 2;
+            if (this.state.player.health <= 0) this.die();
+            this.updateUI();
+        }
+    }
+    
+    checkWin() {
+        get(ref(this.state.db, `rooms/${this.state.roomId}/players`)).then(snap => {
+            const players = snap.val();
+            const alive = Object.values(players).filter(p => !p.isDead);
+            document.getElementById('aliveText').textContent = alive.length;
+            if (alive.length === 1 && alive[0].id === this.state.playerId) {
+                this.win();
+            }
+        });
+    }
+    
+    win() {
+        document.getElementById('victoryScreen').style.display = 'flex';
+        document.getElementById('winAmount').textContent = this.state.player.sats + 5000;
+    }
+    
+    die() {
+        this.state.player.isDead = true;
+        this.notify('☠️ VOUS ÊTES MORT', 'danger');
+        document.getElementById('gameUI').style.display = 'none';
+    }
+    
+    syncPos() {
+        if (!this.gameStarted) return;
+        update(ref(this.state.db, `rooms/${this.state.roomId}/players/${this.state.playerId}`), {
+            x: this.state.player.x, z: this.state.player.z, health: this.state.player.health, 
+            sats: this.state.player.sats, kills: this.state.player.kills
+        });
+        
+        // Sync other players
+        onValue(ref(this.state.db, `rooms/${this.state.roomId}/players`), (snap) => {
+            const data = snap.val();
+            if (!data) return;
+            Object.entries(data).forEach(([id, p]) => {
+                if (id !== this.state.playerId) {
+                    this.state.players.set(id, p);
+                }
+            });
+            document.getElementById('aliveText').textContent = Object.values(data).filter(p => !p.isDead).length;
+        }, { onlyOnce: true });
+    }
+    
+    updateUI() {
+        document.getElementById('satsText').textContent = this.state.player.sats;
+        document.getElementById('healthText').textContent = this.state.player.health;
+        document.getElementById('killText').textContent = this.state.player.kills;
+        const w = this.state.player.inventory[this.state.player.currentSlot];
+        document.getElementById('ammo' + this.state.player.currentSlot).textContent = w ? w.ammo : 0;
+    }
+    
+    handleKey(e, down) {
+        this.keys[e.key.toLowerCase()] = down;
+        if (e.key === 'b' && down) this.tryBuild('wall');
+        if (e.key >= '1' && e.key <= '3' && down) this.switchWeapon(parseInt(e.key)-1);
+    }
+    
+    notify(text, type) {
+        const div = document.createElement('div');
+        div.className = `notification ${type}`;
+        div.textContent = text;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 3000);
+    }
+}
+
+window.game = new SatHuntersGame();
+</script>
+
+</body>
+</html>
